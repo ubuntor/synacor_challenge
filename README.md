@@ -1,6 +1,8 @@
 # Synacor Challenge Stuff
 Run [vm.py](vm.py) with `python3`.
 
+Binary ninja plugin in [binja_plugin](binja_plugin). (WIP)
+
 ## Debug Commands
 - `debug regs` dumps regs.
 - `debug stack` dumps stack.
