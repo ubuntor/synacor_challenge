@@ -52,7 +52,7 @@ class Synacor(Architecture):
     }
     stack_pointer = "sp"
     intrinsics = {
-        "out": IntrinsicInfo([Type.int(2)], []),
+        "out": IntrinsicInfo([Type.char()], []), # ???
         "in": IntrinsicInfo([], [Type.int(2)])
     }
 
@@ -189,15 +189,19 @@ class Synacor(Architecture):
         elif instr == "pop":
             il.append(il.set_reg(2, operands[0], il.pop(2)))
         elif instr == "eq":
-            log.log_error("unimplemented {}".format(instr))
+            il.append(il.set_reg(2, operands[0], il.compare_equal(2, operands[1], operands[2])))
         elif instr == "gt":
-            log.log_error("unimplemented {}".format(instr))
+            il.append(il.set_reg(2, operands[0], il.compare_unsigned_greater_than(2, operands[1], operands[2])))
         elif instr == "jmp":
             il.append(il.jump(operands[0]))
         elif instr == "jt":
-            log.log_error("unimplemented {}".format(instr))
+            true_branch = il.get_label_for_address(il.arch, il[operands[1]].constant)
+            false_branch = il.get_label_for_address(il.arch, addr+length)
+            il.append(il.if_expr(operands[0], true_branch, false_branch))
         elif instr == "jf":
-            log.log_error("unimplemented {}".format(instr))
+            true_branch = il.get_label_for_address(il.arch, addr+length)
+            false_branch = il.get_label_for_address(il.arch, il[operands[1]].constant)
+            il.append(il.if_expr(operands[0], true_branch, false_branch))
         elif instr == "add":
             il.append(il.set_reg(2, operands[0], il.add(2, operands[1], operands[2])))
         elif instr == "mult":
@@ -211,11 +215,11 @@ class Synacor(Architecture):
         elif instr == "not":
             il.append(il.set_reg(2, operands[0], il.not_expr(2, operands[1])))
         elif instr == "rmem":
-            log.log_error("unimplemented {}".format(instr))
+            il.append(il.set_reg(2, operands[0], il.load(2, operands[1])))
         elif instr == "wmem":
-            log.log_error("unimplemented {}".format(instr))
+            il.append(il.store(2, operands[0], operands[1]))
         elif instr == "call":
-            log.log_error("unimplemented {}".format(instr))
+            il.append(il.call(operands[0]))
         elif instr == "ret":
             il.append(il.ret(il.pop(2)))
         elif instr == "out":
