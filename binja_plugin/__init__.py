@@ -1,7 +1,4 @@
-from binaryninja.architecture import Architecture
-from binaryninja.function import RegisterInfo, InstructionInfo, InstructionTextToken
-from binaryninja.enums import BranchType, InstructionTextTokenType
-from binaryninja import interaction
+from binaryninja import *
 import struct
 import os
 
@@ -12,48 +9,29 @@ ADDR = 3
 
 # opcode, operands
 opcodes = {
-    0: ("halt", []),
-    1: ("set", [REG, ARG]),
-    2: ("push", [ARG]),
-    3: ("pop", [REG]),
-    4: ("eq", [REG, ARG, ARG]),
-    5: ("gt", [REG, ARG, ARG]),
-    6: ("jmp", [ADDR]),
-    7: ("jt", [ARG, ADDR]),
-    8: ("jf", [ARG, ADDR]),
-    9: ("add", [REG, ARG, ARG]),
+    0: ("halt",  []),
+    1: ("set",   [REG, ARG]),
+    2: ("push",  [ARG]),
+    3: ("pop",   [REG]),
+    4: ("eq",    [REG, ARG, ARG]),
+    5: ("gt",    [REG, ARG, ARG]),
+    6: ("jmp",   [ADDR]),
+    7: ("jt",    [ARG, ADDR]),
+    8: ("jf",    [ARG, ADDR]),
+    9: ("add",   [REG, ARG, ARG]),
     10: ("mult", [REG, ARG, ARG]),
-    11: ("mod", [REG, ARG, ARG]),
-    12: ("and", [REG, ARG, ARG]),
-    13: ("or", [REG, ARG, ARG]),
-    14: ("not", [REG, ARG]),
+    11: ("mod",  [REG, ARG, ARG]),
+    12: ("and",  [REG, ARG, ARG]),
+    13: ("or",   [REG, ARG, ARG]),
+    14: ("not",  [REG, ARG]),
     15: ("rmem", [REG, ADDR]),
     16: ("wmem", [ADDR, ARG]),
     17: ("call", [ADDR]),
-    18: ("ret", []),
-    19: ("out", [CHAR]),
-    20: ("in", [REG]),
-    21: ("nop", [])
+    18: ("ret",  []),
+    19: ("out",  [CHAR]),
+    20: ("in",   [REG]),
+    21: ("nop",  [])
 }
-
-# approach taken from
-# https://github.com/jeffball55/ctf_writeups/blob/master/defcon_finals_2017/binja/clemency.py
-
-RAW_DATA = None
-FILENAME = None
-def get_filename():
-  global FILENAME
-  if FILENAME == None:
-    FILENAME = os.getenv("BINARY_NINJA_FILENAME")
-    if FILENAME == None:
-      FILENAME = interaction.get_open_filename_input("File to disassemble (please select it again)")
-  return FILENAME
-
-def read_data(addr, length):
-    global RAW_DATA
-    if RAW_DATA == None:
-        RAW_DATA = open(get_filename(),"rb").read()
-    return RAW_DATA[addr:addr+length]
 
 class Synacor(Architecture):
     name = "Synacor Challenge"
@@ -73,10 +51,19 @@ class Synacor(Architecture):
         "sp": RegisterInfo("sp", 2)
     }
     stack_pointer = "sp"
+    intrinsics = {
+        "out": IntrinsicInfo([Type.int(2)], []),
+        "in": IntrinsicInfo([], [Type.int(2)])
+    }
+
+    def is_literal(self, value):
+        return value <= 32767
+
+    def is_register(self, value):
+        return 32768 <= value <= 32775
 
     # instr, ops, length
-    def decode_instruction(self, addr):
-        data = read_data(addr*2, self.max_instr_length)
+    def decode_instruction(self, data):
         if len(data) < 2:
             return None, None, None
         opcode = struct.unpack('<H', data[:2])[0]
@@ -87,31 +74,31 @@ class Synacor(Architecture):
             return None, None, None
         operand_values = struct.unpack('<{}H'.format(len(operand_types)), data[2:2+2*len(operand_types)])
         operands = list(zip(operand_types, operand_values))
-        return instr, operands, len(operands)+1
+        return instr, operands, (len(operands)+1)*2
 
     def get_instruction_info(self, data, addr):
-        instr, operands, length = self.decode_instruction(addr)
+        instr, operands, length = self.decode_instruction(data)
         if instr is None:
             return None
         result = InstructionInfo()
         result.length = length
         if instr == "jmp":
             target = operands[0][1]
-            if target <= 32767:
-                result.add_branch(BranchType.UnconditionalBranch, target)
+            if self.is_literal(target):
+                result.add_branch(BranchType.UnconditionalBranch, 2*target)
             else:
                 result.add_branch(BranchType.UnresolvedBranch)
         elif instr in {"jt", "jf"}:
             target = operands[1][1]
-            if target <= 32767:
-                result.add_branch(BranchType.TrueBranch, target)
+            if self.is_literal(target):
+                result.add_branch(BranchType.TrueBranch, 2*target)
             else:
                 result.add_branch(BranchType.UnresolvedBranch)
             result.add_branch(BranchType.FalseBranch, addr+length)
         elif instr == "call":
             target = operands[0][1]
-            if target <= 32767:
-                result.add_branch(BranchType.CallDestination, target)
+            if self.is_literal(target):
+                result.add_branch(BranchType.CallDestination, 2*target)
             else:
                 result.add_branch(BranchType.UnresolvedBranch)
         elif instr == "ret":
@@ -128,35 +115,35 @@ class Synacor(Architecture):
             else:
                 tokens.append(InstructionTextToken(InstructionTextTokenType.TextToken, ", "))
             if op_type == ARG:
-                if val <= 32767:
+                if self.is_literal(val):
                     tokens.append(InstructionTextToken(InstructionTextTokenType.IntegerToken, "0x{:04x}".format(val), val))
-                elif 32768 <= val <= 32775:
+                elif self.is_register(val):
                     tokens.append(InstructionTextToken(InstructionTextTokenType.RegisterToken, "r{}".format(val-32768)))
                 else:
                     tokens.append(InstructionTextTokenType.TextToken, "INVALID")
             elif op_type == REG:
-                if 32768 <= val <= 32775:
+                if self.is_register(val):
                     tokens.append(InstructionTextToken(InstructionTextTokenType.RegisterToken, "r{}".format(val-32768)))
                 else:
                     tokens.append(InstructionTextTokenType.TextToken, "INVALID")
             elif op_type == CHAR:
-                if val <= 32767:
-                    tokens.append(InstructionTextToken(InstructionTextTokenType.TextToken, "'{}'".format(chr(val))))
-                elif 32768 <= val <= 32775:
+                if self.is_literal(val):
+                    tokens.append(InstructionTextToken(InstructionTextTokenType.TextToken, repr(chr(val))))
+                elif self.is_register(val):
                     tokens.append(InstructionTextToken(InstructionTextTokenType.RegisterToken, "r{}".format(val-32768)))
                 else:
                     tokens.append(InstructionTextTokenType.TextToken, "INVALID")
             elif op_type == ADDR:
-                if val <= 32767:
-                    tokens.append(InstructionTextToken(InstructionTextTokenType.PossibleAddressToken, "0x{:04x}".format(val), val))
-                elif 32768 <= val <= 32775:
-                    tokens.append(InstructionTextToken(InstructionTextTokenType.RegisterToken, "r{}".format(val-32768)))
+                if self.is_literal(val):
+                    tokens.append(InstructionTextToken(InstructionTextTokenType.PossibleAddressToken, "2*0x{:04x}".format(val), 2*val))
+                elif self.is_register(val):
+                    tokens.append(InstructionTextToken(InstructionTextTokenType.RegisterToken, "2*r{}".format(val-32768)))
                 else:
                     tokens.append(InstructionTextTokenType.TextToken, "INVALID")
         return tokens
 
     def get_instruction_text(self, data, addr):
-        instr, operands, length = self.decode_instruction(addr)
+        instr, operands, length = self.decode_instruction(data)
         if instr is None:
             return None
         tokens = []
@@ -164,7 +151,81 @@ class Synacor(Architecture):
         tokens.extend(self.get_operand_text(operands))
         return tokens, length
 
+    def get_operand_il(self, il, operand):
+        op_type, val = operand
+        if op_type in {ARG, CHAR}:
+            if self.is_literal(val):
+                return il.const(2, val)
+            elif self.is_register(val):
+                return il.reg(2, "r{}".format(val-32768))
+            else:
+                return None
+        elif op_type == ADDR:
+            if self.is_literal(val):
+                return il.const_pointer(2, val*2)
+            elif self.is_register(val):
+                return il.shift_left(2, il.reg(2, "r{}".format(val-32768)), il.const(2, 1))
+            else:
+                return None
+        elif op_type == REG:
+            if self.is_register(val):
+                return "r{}".format(val-32768)
+            else:
+                return None
+
     def get_instruction_low_level_il(self, data, addr, il):
-        return None
+        instr, orig_operands, length = self.decode_instruction(data)
+        if instr is None:
+            return None
+        operands = list(map(lambda x: self.get_operand_il(il, x), orig_operands))
+        if None in operands:
+            return None
+        if instr == "halt":
+            il.append(il.no_ret())
+        elif instr == "set":
+            il.append(il.set_reg(2, operands[0], operands[1]))
+        elif instr == "push":
+            il.append(il.push(2, operands[0]))
+        elif instr == "pop":
+            il.append(il.set_reg(2, operands[0], il.pop(2)))
+        elif instr == "eq":
+            log.log_error("unimplemented {}".format(instr))
+        elif instr == "gt":
+            log.log_error("unimplemented {}".format(instr))
+        elif instr == "jmp":
+            il.append(il.jump(operands[0]))
+        elif instr == "jt":
+            log.log_error("unimplemented {}".format(instr))
+        elif instr == "jf":
+            log.log_error("unimplemented {}".format(instr))
+        elif instr == "add":
+            il.append(il.set_reg(2, operands[0], il.add(2, operands[1], operands[2])))
+        elif instr == "mult":
+            il.append(il.set_reg(2, operands[0], il.mult(2, operands[1], operands[2])))
+        elif instr == "mod":
+            il.append(il.set_reg(2, operands[0], il.mod_unsigned(2, operands[1], operands[2])))
+        elif instr == "and":
+            il.append(il.set_reg(2, operands[0], il.and_expr(2, operands[1], operands[2])))
+        elif instr == "or":
+            il.append(il.set_reg(2, operands[0], il.or_expr(2, operands[1], operands[2])))
+        elif instr == "not":
+            il.append(il.set_reg(2, operands[0], il.not_expr(2, operands[1])))
+        elif instr == "rmem":
+            log.log_error("unimplemented {}".format(instr))
+        elif instr == "wmem":
+            log.log_error("unimplemented {}".format(instr))
+        elif instr == "call":
+            log.log_error("unimplemented {}".format(instr))
+        elif instr == "ret":
+            il.append(il.ret(il.pop(2)))
+        elif instr == "out":
+            il.append(il.intrinsic([], "out", [operands[0]]))
+        elif instr == "in":
+            il.append(il.intrinsic([il.reg(2, operands[0])], "in", []))
+        elif instr == "nop":
+            il.append(il.nop())
+        else:
+            log.log_error("unknown instruction {}".format(instr))
+        return length
 
 Synacor.register()
