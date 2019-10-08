@@ -34,7 +34,7 @@ opcodes = {
 }
 
 class Synacor(Architecture):
-    name = "Synacor Challenge"
+    name = "Synacor"
     address_size = 2
     default_int_size = 2
     instr_alignment = 2
@@ -52,7 +52,7 @@ class Synacor(Architecture):
     }
     stack_pointer = "sp"
     intrinsics = {
-        "out": IntrinsicInfo([Type.char()], []), # ???
+        "out": IntrinsicInfo([IntrinsicInput(Type.char())], []),
         "in": IntrinsicInfo([], [Type.int(2)])
     }
 
@@ -173,6 +173,9 @@ class Synacor(Architecture):
             else:
                 return None
 
+    def convert_to_nop(self, data, addr):
+        return ("\x15\x00"*(len(data)//2))[:len(data)]
+
     def get_instruction_low_level_il(self, data, addr, il):
         instr, orig_operands, length = self.decode_instruction(data)
         if instr is None:
@@ -232,4 +235,16 @@ class Synacor(Architecture):
             log.log_error("unknown instruction {}".format(instr))
         return length
 
+# ???????????????????????????
+# wild guess
+class SynacorCC(CallingConvention):
+    caller_saved_regs = ['r0', 'r1', 'r2', 'r3']
+    callee_saved_regs = ['r4', 'r5', 'r6', 'r7']
+    int_arg_regs = ['r0', 'r1', 'r2', 'r3']
+    int_return_reg = 'r0'
+
 Synacor.register()
+arch = architecture.Architecture['Synacor']
+cc = SynacorCC(arch, 'default')
+arch.register_calling_convention(cc)
+arch.standalone_platform.default_calling_convention = cc
