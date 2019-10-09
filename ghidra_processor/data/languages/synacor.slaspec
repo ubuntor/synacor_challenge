@@ -1,30 +1,29 @@
 define endian=little;
-define alignment=1;
+define alignment=2;
 
-define space ram      type=ram_space      size=2 default wordsize=2;
-define space io       type=ram_space      size=1 wordsize=2;
-define space register type=register_space size=1;
+define space ram      type=ram_space      size=2 wordsize=2 default;
+define space register type=register_space size=2;
 
 define register offset=0x00 size=2 [ r0 r1 r2 r3 r4 r5 r6 r7 pc sp ];
 
 # TOKENS
 
-define token opbyte (16)
+define token opword (16)
     opcode = (0,15)
 ;
 
-define token regbyte (16)
+define token regword (16)
     reg = (0,2)
 ;
 
-define token argbyte1 (16)
+define token argword1 (16)
     imm1 = (0,14) 
 ;
-define token argbyte2 (16)
+define token argword2 (16)
     imm2 = (0,14) 
 ;
-define token argbyte3 (16)
-    imm3 = (0,14) 
+define token argword3 (16)
+    imm3 = (0,14)
 ;
 
 # Instructions
@@ -34,63 +33,83 @@ define token argbyte3 (16)
 }
 
 :set imm1, imm2 is opcode=1 ; imm1 ; imm2 {
+    r0 = 1;
 }
 
 :push imm1 is opcode=2 ; imm1 {
+    r0 = 2;
 }
 
 :pop imm1 is opcode=3 ; imm1 {
+    r0 = 3;
 }
 
 :eq imm1, imm2, imm3 is opcode=4 ; imm1 ; imm2 ; imm3 {
+    r0 = 4;
 }
 
 :gt imm1, imm2, imm3 is opcode=5 ; imm1 ; imm2 ; imm3 {
+    r0 = 5;
 }
 
 :jmp imm1 is opcode=6 ; imm1 {
+    r0 = 6;
 }
 
 :jt imm1, imm2 is opcode=7 ; imm1 ; imm2 {
+    r0 = 7;
 }
 
 :jf imm1, imm2 is opcode=8 ; imm1 ; imm2 {
+    r0 = 8;
 }
 
 :add imm1, imm2, imm3 is opcode=9 ; imm1 ; imm2 ; imm3 {
+    r0 = 9;
 }
 
 :mult imm1, imm2, imm3 is opcode=10 ; imm1 ; imm2 ; imm3 {
+    r0 = 10;
 }
 
 :mod imm1, imm2, imm3 is opcode=11 ; imm1 ; imm2 ; imm3 {
+    r0 = 11;
 }
 
 :and imm1, imm2, imm3 is opcode=12 ; imm1 ; imm2 ; imm3 {
+    r0 = 12;
 }
 
 :or imm1, imm2, imm3 is opcode=13 ; imm1 ; imm2 ; imm3 {
+    r0 = 13;
 }
 
 :not imm1, imm2 is opcode=14 ; imm1 ; imm2 {
+    r0 = 14;
 }
 
 :rmem imm1, imm2 is opcode=15 ; imm1 ; imm2 {
+    r0 = 15;
 }
 
 :wmem imm1, imm2 is opcode=16 ; imm1 ; imm2 {
+    r0 = 16;
 }
 
 :call imm1 is opcode=17 ; imm1 {
+    r0 = 17;
 }
 
 :ret is opcode=18 {
+    r0 = 18;
 }
 
 :out imm1 is opcode=19 ; imm1 {
+    r0 = 19;
 }
 
 :in imm1 is opcode=20 ; imm1 {
+    r0 = 20;
 }
 
 :nop  is opcode=21 {
