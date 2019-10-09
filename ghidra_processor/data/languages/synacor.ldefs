@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="Synacor"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="synacor.sla"
+            processorspec="synacor.pspec"
+            id="Synacor:LE:16:default">
+    <description>Synacor Challenge arch, little-endian</description>
+    <compiler name="default" spec="synacor.cspec" id="default"/>
+  </language>
+</language_definitions>
