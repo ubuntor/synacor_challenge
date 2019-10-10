@@ -1,10 +1,10 @@
 @define MASK "(~(1 << 15))"
 
 define endian=little;
-define alignment=2;
+define alignment=2; # very important! otherwise ghidra will refuse to disassemble since wordsize=2
 
 define space ram      type=ram_space      size=2 wordsize=2 default;
-define space register type=register_space size=2;
+define space register type=register_space size=1;
 
 define register offset=0x00 size=2 [ r0 r1 r2 r3 r4 r5 r6 r7 pc sp ];
 
@@ -45,8 +45,8 @@ op1: op1reg is op1mode=1 & op1regrest=0 & op1reg { export op1reg; }
 op1: op1imm is op1mode=0 &                op1imm { export *[const]:2 op1imm; }
 op2: op2reg is op2mode=1 & op2regrest=0 & op2reg { export op2reg; }
 op2: op2imm is op2mode=0 &                op2imm { export *[const]:2 op2imm; }
-addr: [addrreg] is addrmode=1 & addrregrest=0 & addrreg { export addrreg; }
-addr: [addrimm] is addrmode=0 &                 addrimm { export *[const]:2 addrimm; }
+addr: [addrreg] is addrmode=1 & addrregrest=0 & addrreg { export *:2 addrreg; }
+addr: [addrimm] is addrmode=0 &                 addrimm { export *:2 addrimm; }
 
 define pcodeop in;
 define pcodeop out;
@@ -91,8 +91,8 @@ macro pop16(ret16) {
 }
 
 :jt op1, addr is opcode=7 ; op1 ; addr {
-    if (op1 == 0) goto inst_next;
-    goto addr;
+    if (op1 != 0) goto addr;
+    goto inst_next;
 }
 
 :jf op1, addr is opcode=8 ; op1 ; addr {
@@ -132,8 +132,12 @@ macro pop16(ret16) {
     addr = op1;
 }
 
-# TODO addr is wrong
-:call addr is opcode=17 ; addr {
+# TODO addr is wrong/weird
+:call addrreg is opcode=17 ; addrmode=1 & addrregrest=0 & addrreg {
+    push16(&:2 inst_next);
+    call [addrreg];
+}
+:call addr is opcode=17 ; addrmode=0 & addr {
     push16(&:2 inst_next);
     call addr;
 }
