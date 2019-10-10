@@ -1,3 +1,5 @@
+@define MASK "(~(1 << 15))"
+
 define endian=little;
 define alignment=2;
 
@@ -6,25 +8,57 @@ define space register type=register_space size=2;
 
 define register offset=0x00 size=2 [ r0 r1 r2 r3 r4 r5 r6 r7 pc sp ];
 
-# TOKENS
+# Tokens
 
 define token opword (16)
     opcode = (0,15)
 ;
 
-define token regword (16)
-    reg = (0,2)
+define token dstregword (16)
+    dstreg = (0,2)
 ;
 
-define token argword1 (16)
-    imm1 = (0,14) 
+define token op1word (16)
+    op1mode = (15,15)
+    op1imm = (0,14)
+    op1reg = (0,2)
+    op1regrest = (3,14)
 ;
-define token argword2 (16)
-    imm2 = (0,14) 
+
+define token op2word (16)
+    op2mode = (15,15)
+    op2imm = (0,14)
+    op2reg = (0,2)
+    op2regrest = (3,14)
 ;
-define token argword3 (16)
-    imm3 = (0,14)
+
+define token addrword (16)
+    addrmode = (15,15)
+    addrimm = (0,14)
+    addrreg = (0,2)
+    addrregrest = (3,14)
 ;
+
+attach variables [ dstreg op1reg op2reg addrreg ] [ r0 r1 r2 r3 r4 r5 r6 r7 ];
+
+op1: op1reg is op1mode=1 & op1regrest=0 & op1reg { export op1reg; }
+op1: op1imm is op1mode=0 &                op1imm { export *[const]:2 op1imm; }
+op2: op2reg is op2mode=1 & op2regrest=0 & op2reg { export op2reg; }
+op2: op2imm is op2mode=0 &                op2imm { export *[const]:2 op2imm; }
+addr: [addrreg] is addrmode=1 & addrregrest=0 & addrreg { export addrreg; }
+addr: [addrimm] is addrmode=0 &                 addrimm { export *[const]:2 addrimm; }
+
+define pcodeop in;
+define pcodeop out;
+
+macro push16(val16) {
+	sp = sp-2;
+	*:2 sp = val16;
+}
+macro pop16(ret16) {
+	ret16 = *:2 sp;
+	sp = sp+2;
+}
 
 # Instructions
 
@@ -32,85 +66,90 @@ define token argword3 (16)
     goto inst_start;
 }
 
-:set imm1, imm2 is opcode=1 ; imm1 ; imm2 {
-    r0 = 1;
+:set dstreg, op1 is opcode=1 ; dstreg ; op1 {
+    dstreg = op1;
 }
 
-:push imm1 is opcode=2 ; imm1 {
-    r0 = 2;
+:push op1 is opcode=2 ; op1 {
+    push16(op1);
 }
 
-:pop imm1 is opcode=3 ; imm1 {
-    r0 = 3;
+:pop dstreg is opcode=3 ; dstreg {
+    pop16(dstreg);
 }
 
-:eq imm1, imm2, imm3 is opcode=4 ; imm1 ; imm2 ; imm3 {
-    r0 = 4;
+:eq dstreg, op1, op2 is opcode=4 ; dstreg ; op1 ; op2 {
+    dstreg = zext(op1 == op2);
 }
 
-:gt imm1, imm2, imm3 is opcode=5 ; imm1 ; imm2 ; imm3 {
-    r0 = 5;
+:gt dstreg, op1, op2 is opcode=5 ; dstreg ; op1 ; op2 {
+    dstreg = zext(op1 > op2);
 }
 
-:jmp imm1 is opcode=6 ; imm1 {
-    r0 = 6;
+:jmp addr is opcode=6 ; addr {
+    goto addr;
 }
 
-:jt imm1, imm2 is opcode=7 ; imm1 ; imm2 {
-    r0 = 7;
+:jt op1, addr is opcode=7 ; op1 ; addr {
+    if (op1 == 0) goto inst_next;
+    goto addr;
 }
 
-:jf imm1, imm2 is opcode=8 ; imm1 ; imm2 {
-    r0 = 8;
+:jf op1, addr is opcode=8 ; op1 ; addr {
+    if (op1 == 0) goto addr;
+    goto inst_next;
 }
 
-:add imm1, imm2, imm3 is opcode=9 ; imm1 ; imm2 ; imm3 {
-    r0 = 9;
+:add dstreg, op1, op2 is opcode=9 ; dstreg ; op1 ; op2 {
+    dstreg = (op1 + op2) & $(MASK);
 }
 
-:mult imm1, imm2, imm3 is opcode=10 ; imm1 ; imm2 ; imm3 {
-    r0 = 10;
+:mult dstreg, op1, op2 is opcode=10 ; dstreg ; op1 ; op2 {
+    dstreg = (op1 * op2) & $(MASK);
 }
 
-:mod imm1, imm2, imm3 is opcode=11 ; imm1 ; imm2 ; imm3 {
-    r0 = 11;
+:mod dstreg, op1, op2 is opcode=11 ; dstreg ; op1 ; op2 {
+    dstreg = (op1 % op2) & $(MASK);
 }
 
-:and imm1, imm2, imm3 is opcode=12 ; imm1 ; imm2 ; imm3 {
-    r0 = 12;
+:and dstreg, op1, op2 is opcode=12 ; dstreg ; op1 ; op2 {
+    dstreg = op1 & op2;
 }
 
-:or imm1, imm2, imm3 is opcode=13 ; imm1 ; imm2 ; imm3 {
-    r0 = 13;
+:or dstreg, op1, op2 is opcode=13 ; dstreg ; op1 ; op2 {
+    dstreg = op1 | op2;
 }
 
-:not imm1, imm2 is opcode=14 ; imm1 ; imm2 {
-    r0 = 14;
+:not dstreg, op1 is opcode=14 ; dstreg ; op1 {
+    dstreg = (~op1) & $(MASK);
 }
 
-:rmem imm1, imm2 is opcode=15 ; imm1 ; imm2 {
-    r0 = 15;
+:rmem dstreg, addr is opcode=15 ; dstreg ; addr {
+    dstreg = addr;
 }
 
-:wmem imm1, imm2 is opcode=16 ; imm1 ; imm2 {
-    r0 = 16;
+:wmem addr, op1 is opcode=16 ; addr ; op1 {
+    addr = op1;
 }
 
-:call imm1 is opcode=17 ; imm1 {
-    r0 = 17;
+# TODO addr is wrong
+:call addr is opcode=17 ; addr {
+    push16(&:2 inst_next);
+    call addr;
 }
 
 :ret is opcode=18 {
-    r0 = 18;
+    pop16(pc);
+    return [pc];
 }
 
-:out imm1 is opcode=19 ; imm1 {
-    r0 = 19;
+:out op1 is opcode=19 ; op1 {
+    out(op1);
 }
 
-:in imm1 is opcode=20 ; imm1 {
-    r0 = 20;
+:in dstreg is opcode=20 ; dstreg {
+    dstreg = in();
 }
 
-:nop  is opcode=21 {
+:nop is opcode=21 {
 }
