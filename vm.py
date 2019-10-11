@@ -11,6 +11,89 @@ debugprint = [False]*22
 ops = ['halt','set','push','pop','eq','gt','jmp','jt','jf','add','mult','mod',
        'and','or','not','rmem','wmem','call','ret','out','in','noop']
 
+play = '''
+take tablet
+doorway
+north
+north
+bridge
+continue
+down
+east
+take empty lantern
+west
+west
+passage
+ladder
+west
+south
+north
+take can
+use can
+use lantern
+west
+ladder
+darkness
+continue
+west
+west
+west
+west
+north
+take red coin
+north
+east
+take concave coin
+down
+take corroded coin
+up
+west
+west
+take blue coin
+up
+take shiny coin
+down
+east
+use blue coin
+use red coin
+use shiny coin
+use concave coin
+use corroded coin
+north
+take teleporter
+use teleporter
+take business card
+take strange book
+debug teleporter
+use teleporter
+north
+north
+north
+north
+north
+north
+north
+north
+north
+take orb
+north
+east
+east
+north
+west
+south
+east
+east
+west
+north
+north
+east
+vault
+take mirror
+use mirror
+'''.strip().split('\n')
+
+
 def printdebug(op,s):
     if debugprint[op]:
         print(s)
@@ -20,7 +103,13 @@ def debugcommand(s):
     if 'debug' not in s:
         return
     for i in s.split()[1:]:
-        if i == 'regs':
+        if i == 'teleporter':
+            reg[7] = 25734
+            # nop out ackermann
+            NOP = 21
+            for addr in range(0x1571, 0x157a):
+                writemem(addr, NOP)
+        elif i == 'regs':
             print('Regs: {}'.format(reg))
         elif i == 'stack':
             print('Stack: {}'.format(stack))
@@ -62,7 +151,7 @@ def writemem(a,b):
     memory = memory[:2*a] + w + memory[2*a+2:]
 
 def opcode(n):
-    global eip, inline
+    global eip, inline, play
     if n == 0:
         printdebug(0,'{}: halt'.format(eip))
         print('Exiting...')
@@ -173,10 +262,21 @@ def opcode(n):
         print(chr(a),end='')
     elif n == 20:
         if inline == '':
-            inline = 'debug'
-            while 'debug' in inline:
-                inline = input()+'\n'
-                debugcommand(inline)
+            if len(play) > 0:
+                inline = play[0]+"\n"
+                play = play[1:]
+                print("> {}".format(inline))
+                if 'debug' in inline:
+                    debugcommand(inline)
+                    inline = play[0]+"\n"
+                    play = play[1:]
+            else:
+                inline = 'debug'
+                while 'debug' in inline:
+                    #print("value: {}".format(readmem(0xf70)))
+                    #print("timer: {:015b}".format(readmem(0xf72)))
+                    inline = input()+'\n'
+                    debugcommand(inline)
         a = parsereg()
         printdebug(20,'{}: in {}'.format(eip,a))
         reg[a] = ord(inline[0])
